@@ -29,6 +29,20 @@ export async function fetchVideoMeta(videoId: string): Promise<{ title: string; 
   }
 }
 
+export async function fetchPlaylistMeta(
+  playlistId: string
+): Promise<{ title: string; author: string } | null> {
+  try {
+    const target = encodeURIComponent(`https://www.youtube.com/playlist?list=${playlistId}`);
+    const res = await fetch(`https://www.youtube.com/oembed?url=${target}&format=json`);
+    if (!res.ok) return null;
+    const { title, author_name } = await res.json();
+    return { title, author: author_name };
+  } catch {
+    return null;
+  }
+}
+
 export function shuffleArray<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
