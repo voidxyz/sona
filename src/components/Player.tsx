@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import YouTube from 'react-youtube';
-import { ArrowLeft, Music } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { ArrowLeft } from 'lucide-react';
 import Controls, { type RepeatMode } from './Controls';
 import ProgressBar from './ProgressBar';
 import Queue from './Queue';
@@ -38,7 +39,6 @@ interface Props {
 
 export default function Player({ playlistId, onBack }: Props) {
   // ── Mutable refs for stable callback access ──────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playerRef = useRef<YTPlayer | null>(null);
   const videoIdsRef = useRef<string[]>([]);
   const playOrderRef = useRef<number[]>([]);
@@ -61,6 +61,7 @@ export default function Player({ playlistId, onBack }: Props) {
   const [thumbFailed, setThumbFailed] = useState(false);
 
   const { toasts, addToast, removeToast } = useToast();
+  const reduce = useReducedMotion();
 
   // ── Helpers to sync refs + state together ────────────────────────────────
   function updatePos(newPos: number) {
@@ -208,7 +209,9 @@ export default function Player({ playlistId, onBack }: Props) {
       try {
         setProgress(playerRef.current.getCurrentTime?.() ?? 0);
         setDuration(playerRef.current.getDuration?.() ?? 0);
-      } catch {}
+      } catch {
+        // player torn down between ticks — next poll recovers
+      }
     }, 500);
     return () => clearInterval(timer);
   }, []);
@@ -216,7 +219,8 @@ export default function Player({ playlistId, onBack }: Props) {
   // ── Controls ──────────────────────────────────────────────────────────────
   function togglePlay() {
     if (!playerRef.current) return;
-    isPlaying ? playerRef.current.pauseVideo() : playerRef.current.playVideo();
+    if (isPlaying) playerRef.current.pauseVideo();
+    else playerRef.current.playVideo();
   }
 
   function handleSeek(seconds: number) {
@@ -265,9 +269,12 @@ export default function Player({ playlistId, onBack }: Props) {
   const currentMeta = meta.get(currentVideoId);
   const upcomingIds = playOrder.slice(pos + 1).map(i => videoIds[i]).filter(Boolean);
   const thumbUrl = currentVideoId ? getThumbnail(currentVideoId) : '';
+  const seekPct = duration > 0 ? Math.min(100, (progress / duration) * 100) : 0;
+
+  const statusLabel = !currentVideoId ? 'Standby' : isPlaying ? 'Now playing' : 'Paused';
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
+    <div className="flex min-h-dvh flex-col bg-ink text-paper">
       {/* Hidden YouTube player — 1×1px, opacity 0, not display:none */}
       <div
         style={{
@@ -298,59 +305,113 @@ export default function Player({ playlistId, onBack }: Props) {
         />
       </div>
 
-      {/* Header */}
-      <header className="flex items-center justify-between px-5 pt-5 pb-2">
+      {/* Playhead as a full-bleed hairline across the top of the viewport */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-x-0 top-0 z-40 h-px origin-left bg-accent"
+        style={{ transform: `scaleX(${seekPct / 100})` }}
+      />
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <header className="flex items-center justify-between border-b border-line px-4 py-3 sm:px-6">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-zinc-700 hover:text-zinc-400 transition-colors text-xs tracking-wide"
+          className="group flex items-center gap-2 text-faint transition-colors duration-150 hover:text-paper"
         >
-          <ArrowLeft size={14} />
-          <span>Change playlist</span>
+          <ArrowLeft
+            size={12}
+            strokeWidth={1.75}
+            aria-hidden="true"
+            className="transition-transform duration-200 ease-swiss group-hover:-translate-x-1"
+          />
+          <span className="label transition-colors duration-150 group-hover:text-paper">
+            Change playlist
+          </span>
         </button>
-        <span className="text-xs font-bold tracking-tighter text-zinc-800">
-          son<span className="text-cyan-900">a</span>
+
+        <span className="font-display text-xs font-semibold tracking-[-0.03em] text-ghost">
+          son<span className="text-accent-dim">a</span>
         </span>
-        <div className="w-28" />
       </header>
 
-      {/* Main content */}
-      <main className="flex-1 flex flex-col items-center px-6 pb-8 gap-6 max-w-sm mx-auto w-full">
-        {/* Album art */}
-        <div className="w-full aspect-square rounded-xl overflow-hidden bg-zinc-950 border border-zinc-900 mt-2">
-          {currentVideoId && !thumbFailed ? (
-            <img
-              key={currentVideoId}
-              src={thumbUrl}
-              alt={currentMeta?.title ?? ''}
-              className="w-full h-full object-cover"
-              onError={() => setThumbFailed(true)}
+      {/* ── Main ───────────────────────────────────────────────────────────── */}
+      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col px-4 pb-8 sm:px-6">
+        {/* status row */}
+        <div className="flex h-9 items-center justify-between border-b border-line">
+          <span className="flex items-center gap-2">
+            <motion.span
+              aria-hidden="true"
+              className={`h-1 w-1 ${isPlaying ? 'bg-accent' : 'bg-ghost'}`}
+              animate={isPlaying && !reduce ? { opacity: [1, 0.25, 1] } : { opacity: 1 }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
             />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Music size={48} className="text-zinc-900" />
-            </div>
-          )}
-        </div>
+            <span className="label">{statusLabel}</span>
+          </span>
 
-        {/* Track info */}
-        <div className="w-full text-center">
-          <h2 className="text-base font-semibold text-white leading-snug line-clamp-2 tracking-tight">
-            {currentMeta?.title ?? (currentVideoId ? 'Loading…' : 'Waiting for playlist…')}
-          </h2>
-          <p className="text-sm text-zinc-500 mt-1 truncate">
-            {currentMeta?.author ?? ''}
-          </p>
           {videoIds.length > 0 && (
-            <p className="text-xs text-zinc-800 mt-1 font-mono">
-              {pos + 1} / {playOrder.length}
-            </p>
+            <span className="font-mono text-meta tabular-nums text-muted">
+              {String(pos + 1).padStart(2, '0')}
+              <span className="mx-1.5 text-ghost">/</span>
+              {String(playOrder.length).padStart(2, '0')}
+            </span>
           )}
         </div>
 
-        {/* Progress bar */}
-        <ProgressBar progress={progress} duration={duration} onSeek={handleSeek} />
+        {/* artwork */}
+        <div className="relative mt-5 aspect-square w-full overflow-hidden border border-line bg-surface">
+          <AnimatePresence initial={false}>
+            {currentVideoId && !thumbFailed ? (
+              <motion.img
+                key={currentVideoId}
+                src={thumbUrl}
+                alt={currentMeta?.title ? `Artwork for ${currentMeta.title}` : ''}
+                initial={{ opacity: 0, scale: reduce ? 1 : 1.03 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: reduce ? 0 : 0.4, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute inset-0 h-full w-full object-cover"
+                onError={() => setThumbFailed(true)}
+              />
+            ) : (
+              <div
+                key="placeholder"
+                className="absolute inset-0 flex items-center justify-center"
+              >
+                <span className="label text-ghost">
+                  {currentVideoId ? 'No artwork' : 'Loading playlist'}
+                </span>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
 
-        {/* Controls */}
+        {/* track info */}
+        <div className="mt-5 min-h-[3.25rem]">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={currentVideoId || 'empty'}
+              initial={{ opacity: 0, y: reduce ? 0 : 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: reduce ? 0 : -4 }}
+              transition={{ duration: reduce ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <h1 className="line-clamp-2 font-display text-[0.9375rem] font-medium leading-[1.35] tracking-[-0.01em] text-paper">
+                {currentMeta?.title ?? (currentVideoId ? 'Loading…' : 'Waiting for playlist')}
+              </h1>
+              {currentMeta?.author && (
+                <p className="mt-1.5 truncate font-mono text-micro uppercase text-faint">
+                  {currentMeta.author}
+                </p>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* transport */}
+        <div className="mt-3.5">
+          <ProgressBar progress={progress} duration={duration} onSeek={handleSeek} />
+        </div>
+
         <Controls
           isPlaying={isPlaying}
           shuffle={shuffle}
@@ -364,14 +425,15 @@ export default function Player({ playlistId, onBack }: Props) {
           onVolumeChange={handleVolumeChange}
         />
 
-        {/* Queue */}
-        <Queue
-          open={queueOpen}
-          onToggle={() => setQueueOpen(o => !o)}
-          upcomingIds={upcomingIds}
-          meta={meta}
-          onJump={jumpToQueue}
-        />
+        <div className="mt-5">
+          <Queue
+            open={queueOpen}
+            onToggle={() => setQueueOpen(o => !o)}
+            upcomingIds={upcomingIds}
+            meta={meta}
+            onJump={jumpToQueue}
+          />
+        </div>
       </main>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />

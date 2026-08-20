@@ -1,4 +1,8 @@
-import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX } from 'lucide-react';
+import { motion } from 'framer-motion';
+import {
+  Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
+} from 'lucide-react';
+import Rail from './Rail';
 
 export type RepeatMode = 'off' | 'one' | 'all';
 
@@ -15,29 +19,31 @@ interface Props {
   onVolumeChange: (v: number) => void;
 }
 
-function IconBtn({
-  onClick,
-  active,
-  children,
-  large,
+/** Secondary transport button — 44px hit area, hairline underline marks state. */
+function GhostBtn({
+  onClick, label, active, pressed, children,
 }: {
   onClick: () => void;
+  label: string;
   active?: boolean;
+  pressed?: boolean;
   children: React.ReactNode;
-  large?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`
-        flex items-center justify-center rounded-full transition-all
-        ${large
-          ? 'w-14 h-14 bg-cyan-400 text-black hover:bg-cyan-300 active:bg-cyan-500 active:scale-95 shadow-lg shadow-cyan-900/30'
-          : `w-10 h-10 ${active ? 'text-cyan-400' : 'text-zinc-600 hover:text-white'} transition-colors`
-        }
-      `}
+      aria-label={label}
+      aria-pressed={pressed}
+      className={`relative flex h-11 w-11 items-center justify-center transition-colors duration-150
+        ${active ? 'text-accent' : 'text-faint hover:text-paper'}`}
     >
       {children}
+      {/* Non-colour state cue: a lit hairline under the glyph */}
+      <span
+        aria-hidden="true"
+        className={`absolute bottom-2 h-px w-3.5 transition-opacity duration-150
+          ${active ? 'bg-accent opacity-100' : 'opacity-0'}`}
+      />
     </button>
   );
 }
@@ -46,55 +52,93 @@ export default function Controls({
   isPlaying, shuffle, repeat, volume,
   onTogglePlay, onNext, onPrev, onToggleShuffle, onCycleRepeat, onVolumeChange,
 }: Props) {
-  const volPct = volume;
+  const repeatLabel =
+    repeat === 'off' ? 'Repeat off' : repeat === 'one' ? 'Repeat one track' : 'Repeat all';
 
   return (
-    <div className="flex flex-col gap-5 items-center w-full">
-      {/* Transport */}
-      <div className="flex items-center gap-3">
-        <IconBtn onClick={onToggleShuffle} active={shuffle}>
-          <Shuffle size={17} />
-        </IconBtn>
+    <div className="w-full">
+      {/* ── transport ──────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-center gap-0.5 py-4">
+        <GhostBtn
+          onClick={onToggleShuffle}
+          label={shuffle ? 'Shuffle on' : 'Shuffle off'}
+          pressed={shuffle}
+          active={shuffle}
+        >
+          <Shuffle size={15} strokeWidth={1.75} aria-hidden="true" />
+        </GhostBtn>
 
-        <IconBtn onClick={onPrev}>
-          <SkipBack size={22} />
-        </IconBtn>
+        <GhostBtn onClick={onPrev} label="Previous track">
+          <SkipBack size={18} strokeWidth={1.75} aria-hidden="true" />
+        </GhostBtn>
 
-        <IconBtn onClick={onTogglePlay} large>
-          {isPlaying
-            ? <Pause size={24} />
-            : <Play size={24} className="translate-x-0.5" />
-          }
-        </IconBtn>
+        {/* The one filled block in the whole interface */}
+        <motion.button
+          onClick={onTogglePlay}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          whileTap={{ scale: 0.94 }}
+          transition={{ duration: 0.12 }}
+          className="mx-2 flex h-12 w-12 items-center justify-center bg-accent text-ink
+                     transition-[filter] duration-200 hover:brightness-110"
+        >
+          {isPlaying ? (
+            <Pause size={19} strokeWidth={2} fill="currentColor" aria-hidden="true" />
+          ) : (
+            <Play
+              size={19}
+              strokeWidth={2}
+              fill="currentColor"
+              aria-hidden="true"
+              className="translate-x-px"
+            />
+          )}
+        </motion.button>
 
-        <IconBtn onClick={onNext}>
-          <SkipForward size={22} />
-        </IconBtn>
+        <GhostBtn onClick={onNext} label="Next track">
+          <SkipForward size={18} strokeWidth={1.75} aria-hidden="true" />
+        </GhostBtn>
 
-        <IconBtn onClick={onCycleRepeat} active={repeat !== 'off'}>
-          {repeat === 'one' ? <Repeat1 size={17} /> : <Repeat size={17} />}
-        </IconBtn>
+        <GhostBtn
+          onClick={onCycleRepeat}
+          label={repeatLabel}
+          pressed={repeat !== 'off'}
+          active={repeat !== 'off'}
+        >
+          {repeat === 'one' ? (
+            <Repeat1 size={15} strokeWidth={1.75} aria-hidden="true" />
+          ) : (
+            <Repeat size={15} strokeWidth={1.75} aria-hidden="true" />
+          )}
+        </GhostBtn>
       </div>
 
-      {/* Volume */}
-      <div className="flex items-center gap-3 w-full max-w-xs">
+      {/* ── volume ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 border-t border-line pt-1">
         <button
           onClick={() => onVolumeChange(volume === 0 ? 80 : 0)}
-          className="text-zinc-600 hover:text-zinc-400 transition-colors"
+          aria-label={volume === 0 ? 'Unmute' : 'Mute'}
+          className="flex h-6 items-center gap-2 text-faint transition-colors duration-150 hover:text-paper"
         >
-          {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          {volume === 0 ? (
+            <VolumeX size={13} strokeWidth={1.75} aria-hidden="true" />
+          ) : (
+            <Volume2 size={13} strokeWidth={1.75} aria-hidden="true" />
+          )}
+          <span className="label">Vol</span>
         </button>
-        <input
-          type="range"
-          min={0}
-          max={100}
+
+        <Rail
           value={volume}
-          onChange={e => onVolumeChange(parseInt(e.target.value, 10))}
-          className="flex-1"
-          style={{
-            background: `linear-gradient(to right, #22d3ee 0%, #22d3ee ${volPct}%, #18181b ${volPct}%, #18181b 100%)`,
-          }}
+          max={100}
+          onChange={onVolumeChange}
+          ariaLabel="Volume"
+          valueText={`${volume} percent`}
+          compact
         />
+
+        <span className="w-7 text-right font-mono text-meta tabular-nums text-faint">
+          {String(volume).padStart(3, '0')}
+        </span>
       </div>
     </div>
   );

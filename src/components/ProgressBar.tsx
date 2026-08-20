@@ -1,3 +1,4 @@
+import Rail from './Rail';
 import { formatTime } from '../utils/youtube';
 
 interface Props {
@@ -7,28 +8,23 @@ interface Props {
 }
 
 export default function ProgressBar({ progress, duration, onSeek }: Props) {
-  const pct = duration > 0 ? Math.min(100, (progress / duration) * 100) : 0;
-
   return (
-    <div className="flex items-center gap-3 w-full">
-      <span className="text-xs text-zinc-600 w-10 text-right tabular-nums font-mono">
-        {formatTime(progress)}
-      </span>
-      <input
-        type="range"
-        min={0}
+    <div className="w-full">
+      <Rail
+        value={progress}
         max={Math.max(duration, 1)}
         step={0.5}
-        value={progress}
-        onChange={e => onSeek(parseFloat(e.target.value))}
-        className="flex-1"
-        style={{
-          background: `linear-gradient(to right, #22d3ee 0%, #22d3ee ${pct}%, #18181b ${pct}%, #18181b 100%)`,
-        }}
+        onChange={onSeek}
+        ariaLabel="Seek"
+        valueText={`${formatTime(progress)} of ${formatTime(duration)}`}
       />
-      <span className="text-xs text-zinc-600 w-10 tabular-nums font-mono">
-        {formatTime(duration)}
-      </span>
+
+      {/* Timecodes sit under the rail, justified to its ends — never inline,
+          so the rail always spans the full measure. */}
+      <div className="flex items-baseline justify-between font-mono text-meta tabular-nums">
+        <span className="text-muted">{formatTime(progress)}</span>
+        <span className="text-faint">{duration > 0 ? formatTime(duration) : '--:--'}</span>
+      </div>
     </div>
   );
 }

@@ -4,7 +4,9 @@ export function extractPlaylistId(url: string): string | null {
     const u = new URL(trimmed);
     const list = u.searchParams.get('list');
     if (list) return list;
-  } catch {}
+  } catch {
+    // not a URL — fall through to the raw-ID check
+  }
   // Accept raw playlist ID
   if (/^[A-Za-z0-9_-]{10,}$/.test(trimmed)) return trimmed;
   return null;
