@@ -21,11 +21,37 @@
   --accent: #22D3EE;       /* cyan signal */
   --accent-dim: #0E7490;
 
+  --grain: 0.035;
+
   --dur-fast: 140ms;
   --dur: 220ms;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   color-scheme: dark;
+}
+
+/* ── Light theme ────────────────────────────────────────────────────────────
+   Toggled from the corner mark. Same system, inverted: a white page, warm
+   near-black type, and a deepened cyan so the signal colour still carries
+   against white (the dark-mode cyan sits at ~1.7:1 there and vanishes).
+   ─────────────────────────────────────────────────────────────────────────── */
+:root[data-theme='light'] {
+  --ink: #FFFFFF;          /* page */
+  --surface: #F4F4F0;      /* the one raised plane */
+  --line: #E4E4DC;         /* hairline rules */
+  --line-strong: #C9C9BF;
+
+  --paper: #16160F;        /* primary type — ~18:1 on white */
+  --muted: #55554F;        /* secondary type — ~7.5:1 */
+  --faint: #6F6F66;        /* micro-labels — ~5:1, AA at small sizes */
+  --ghost: #B4B4AA;        /* non-informational marks only */
+
+  --accent: #0E7490;       /* cyan signal — 5.4:1, and carries white on the fill */
+  --accent-dim: #3E93A8;
+
+  --grain: 0.02;           /* noise reads harder on white — pull it back */
+
+  color-scheme: light;
 }
 
 * {
@@ -54,7 +80,7 @@ body::after {
   inset: 0;
   z-index: 9999;
   pointer-events: none;
-  opacity: 0.035;
+  opacity: var(--grain);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 

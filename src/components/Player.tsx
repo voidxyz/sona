@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import YouTube from 'react-youtube';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ListPlus } from 'lucide-react';
 import Controls, { type RepeatMode } from './Controls';
 import ProgressBar from './ProgressBar';
 import Queue from './Queue';
@@ -259,6 +259,19 @@ export default function Player({ playlistId, onBack }: Props) {
     setRepeat(next);
   }
 
+  // Hand the track off to youtube.com, where the user's own session can save it
+  // to a playlist. Doing this in-app would need OAuth + a verified Google app.
+  function saveToYouTube() {
+    const id = videoIdsRef.current[playOrderRef.current[posRef.current]];
+    if (!id) return;
+    const win = window.open(
+      `https://www.youtube.com/watch?v=${id}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
+    if (!win) addToast('Allow pop-ups to open this track on YouTube');
+  }
+
   function jumpToQueue(queueIndex: number) {
     navigateTo(pos + 1 + queueIndex);
   }
@@ -329,7 +342,7 @@ export default function Player({ playlistId, onBack }: Props) {
           </span>
         </button>
 
-        <span className="font-display text-xs font-semibold tracking-[-0.03em] text-ghost">
+        <span className="font-display text-xs font-semibold tracking-[-0.03em] text-faint">
           son<span className="text-accent-dim">a</span>
         </span>
       </header>
@@ -385,26 +398,40 @@ export default function Player({ playlistId, onBack }: Props) {
           </AnimatePresence>
         </div>
 
-        {/* track info */}
-        <div className="mt-5 min-h-[3.25rem]">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={currentVideoId || 'empty'}
-              initial={{ opacity: 0, y: reduce ? 0 : 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: reduce ? 0 : -4 }}
-              transition={{ duration: reduce ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <h1 className="line-clamp-2 font-display text-[0.9375rem] font-medium leading-[1.35] tracking-[-0.01em] text-paper">
-                {currentMeta?.title ?? (currentVideoId ? 'Loading…' : 'Waiting for playlist')}
-              </h1>
-              {currentMeta?.author && (
-                <p className="mt-1.5 truncate font-mono text-micro uppercase text-faint">
-                  {currentMeta.author}
-                </p>
-              )}
-            </motion.div>
-          </AnimatePresence>
+        {/* track info — title block, with the save action beside it */}
+        <div className="mt-5 flex min-h-[3.25rem] items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={currentVideoId || 'empty'}
+                initial={{ opacity: 0, y: reduce ? 0 : 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: reduce ? 0 : -4 }}
+                transition={{ duration: reduce ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <h1 className="line-clamp-2 font-display text-[0.9375rem] font-medium leading-[1.35] tracking-[-0.01em] text-paper">
+                  {currentMeta?.title ?? (currentVideoId ? 'Loading…' : 'Waiting for playlist')}
+                </h1>
+                {currentMeta?.author && (
+                  <p className="mt-1.5 truncate font-mono text-micro uppercase text-faint">
+                    {currentMeta.author}
+                  </p>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Hands the track to youtube.com, where the user's own session saves it */}
+          <button
+            onClick={saveToYouTube}
+            disabled={!currentVideoId}
+            aria-label="Open on YouTube to save to a playlist"
+            className="-mr-2 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center text-faint
+                       transition-colors duration-150 hover:text-paper
+                       disabled:pointer-events-none disabled:text-ghost"
+          >
+            <ListPlus size={14} strokeWidth={1.75} aria-hidden="true" />
+          </button>
         </div>
 
         {/* transport */}

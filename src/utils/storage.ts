@@ -1,4 +1,6 @@
-const K = { URL: 'sona_url', VOL: 'sona_vol' } as const;
+const K = { URL: 'sona_url', VOL: 'sona_vol', THEME: 'sona_theme' } as const;
+
+export type Theme = 'dark' | 'light';
 
 export const storage = {
   getUrl: (): string => localStorage.getItem(K.URL) ?? '',
@@ -8,4 +10,6 @@ export const storage = {
     return v != null ? Math.max(0, Math.min(100, parseInt(v, 10))) : 80;
   },
   setVolume: (v: number) => localStorage.setItem(K.VOL, String(v)),
+  getTheme: (): Theme => (localStorage.getItem(K.THEME) === 'light' ? 'light' : 'dark'),
+  setTheme: (v: Theme) => localStorage.setItem(K.THEME, v),
 };

@@ -3,10 +3,13 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import PlaylistInput from './components/PlaylistInput';
 import Player from './components/Player';
 import Nunu from './components/Nunu';
+import { useTitleMeter } from './hooks/useTitleMeter';
 
 export default function App() {
   const [playlistId, setPlaylistId] = useState<string | null>(null);
   const reduce = useReducedMotion();
+
+  useTitleMeter();
 
   const fade = {
     initial: { opacity: 0 },

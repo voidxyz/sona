@@ -60,8 +60,7 @@ export default function PlaylistInput({ onSubmit }: Props) {
 
           <motion.div variants={rise} className="mt-6 border-t border-line pt-3.5">
             <p className="max-w-[36ch] font-mono text-[0.6875rem] leading-relaxed text-muted">
-              Paste any public playlist. It plays as audio, in order or shuffled,
-              and nothing leaves your browser.
+              Paste any public playlist. Stop dropping frames, start gaining Elo.
             </p>
           </motion.div>
 

@@ -6,9 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#060606" />
     <meta name="color-scheme" content="dark" />
+
+    <!-- Applies a saved light theme before first paint, so reloading into the
+         white palette doesn't flash the dark page first. Key mirrors storage.ts. -->
+    <script>
+      try {
+        if (localStorage.getItem('sona_theme') === 'light') {
+          document.documentElement.dataset.theme = 'light';
+          document
+            .querySelector('meta[name="theme-color"]')
+            .setAttribute('content', '#FFFFFF');
+        }
+      } catch (e) {
+        /* private mode / storage disabled — default dark is fine */
+      }
+    </script>
     <meta
       name="description"
-      content="sona — a quiet, keyboard-friendly player for any public YouTube playlist."
+      content="sona - a quiet, keyboard-friendly player for any public YouTube playlist."
     />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -23,7 +38,7 @@
       href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
     />
 
-    <title>sona — playlist player</title>
+    <title>sona ⣤⣤⣤ playlist player</title>
   </head>
   <body>
     <div id="root"></div>
