@@ -1,5 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <rect width="32" height="32" fill="#060606"/>
-  <rect x="4" y="4" width="24" height="24" fill="#22D3EE"/>
-  <path d="M13 11.5 L21.5 16 L13 20.5 Z" fill="#060606"/>
+  <style>
+    /* Deep cyan by default so it holds up on a light tab strip; the bright
+       signal cyan when the browser is dark. Mirrors --accent in index.css. */
+    path { fill: #0E7490 }
+    @media (prefers-color-scheme: dark) { path { fill: #22D3EE } }
+  </style>
+  <path d="M10 6.5 L24.5 16 L10 25.5 Z"/>
 </svg>
