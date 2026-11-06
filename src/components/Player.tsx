@@ -24,7 +24,7 @@ interface YTPlayer {
   pauseVideo(): void;
   seekTo(seconds: number, allowSeekAhead: boolean): void;
   setVolume(volume: number): void;
-  playVideoAt(index: number): void;
+  loadVideoById(videoId: string): void;
   getPlaylist(): string[];
   getPlaylistIndex(): number;
   getCurrentTime(): number;
@@ -45,6 +45,14 @@ export default function Player({ playlistId, onBack }: Props) {
   const posRef = useRef(0);
   const repeatRef = useRef<RepeatMode>('off');
   const fetchedRef = useRef<Set<string>>(new Set());
+  const shuffleRef = useRef(false);
+  // The track we asked the player to play. YouTube's native playlist mode
+  // auto-advances sequentially on its own; anything else gets corrected.
+  const expectedIdRef = useRef<string | null>(null);
+  const correctionsRef = useRef(0);
+  // Original indices in the order they actually played (unique) — the
+  // current shuffle cycle. Shuffle never re-queues anything in here.
+  const playedRef = useRef<number[]>([]);
 
   // ── React state (drives UI) ───────────────────────────────────────────────
   const [videoIds, setVideoIds] = useState<string[]>([]);
@@ -98,7 +106,12 @@ export default function Player({ playlistId, onBack }: Props) {
     const order = playOrderRef.current;
     const ids = videoIdsRef.current;
     if (!playerRef.current || !ids.length || newPos < 0 || newPos >= order.length) return;
-    playerRef.current.playVideoAt(order[newPos]);
+    const id = ids[order[newPos]];
+    expectedIdRef.current = id;
+    correctionsRef.current = 0;
+    // loadVideoById takes the player out of native playlist mode, so YouTube
+    // stops auto-advancing in its own (sequential) order.
+    playerRef.current.loadVideoById(id);
     updatePos(newPos);
     setProgress(0);
     setDuration(0);
@@ -106,10 +119,26 @@ export default function Player({ playlistId, onBack }: Props) {
     prefetchMeta(newPos);
   }
 
+  // Fresh shuffled cycle over every track, never opening with `avoidIdx`
+  // (the track that just played) so the wrap-around can't repeat it.
+  function freshShuffle(avoidIdx: number | undefined) {
+    const order = shuffleArray(videoIdsRef.current.map((_, i) => i));
+    if (order.length > 1 && order[0] === avoidIdx) {
+      const j = 1 + Math.floor(Math.random() * (order.length - 1));
+      [order[0], order[j]] = [order[j], order[0]];
+    }
+    return order;
+  }
+
   function goNext() {
     const nextPos = posRef.current + 1;
     if (nextPos >= playOrderRef.current.length) {
-      if (repeatRef.current === 'all') navigateTo(0);
+      if (repeatRef.current !== 'all') return;
+      playedRef.current = [];
+      if (shuffleRef.current) {
+        updatePlayOrder(freshShuffle(playOrderRef.current[posRef.current]));
+      }
+      navigateTo(0);
     } else {
       navigateTo(nextPos);
     }
@@ -131,12 +160,24 @@ export default function Player({ playlistId, onBack }: Props) {
   }
 
   // ── Init playlist from player ─────────────────────────────────────────────
-  function initPlaylist(ids: string[]) {
+  function initPlaylist(rawIds: string[]) {
+    // Playlists can contain the same video more than once — keep one copy
+    const ids = [...new Set(rawIds)];
     videoIdsRef.current = ids;
     const order = ids.map((_, i) => i);
     updatePlayOrder(order);
     setVideoIds(ids);
-    const startIdx = playerRef.current?.getPlaylistIndex?.() ?? 0;
+    const rawStart = playerRef.current?.getPlaylistIndex?.() ?? 0;
+    const startIdx = Math.max(0, ids.indexOf(rawIds[rawStart] ?? ids[0]));
+    expectedIdRef.current = ids[startIdx];
+    playedRef.current = [startIdx];
+    if (shuffleRef.current) {
+      // Shuffle was switched on before the playlist arrived
+      updatePlayOrder([startIdx, ...shuffleArray(order.filter(i => i !== startIdx))]);
+      updatePos(0);
+      prefetchMeta(0);
+      return;
+    }
     updatePos(startIdx);
     prefetchMeta(startIdx);
   }
@@ -161,16 +202,23 @@ export default function Player({ playlistId, onBack }: Props) {
     const state = event.data;
 
     if (state === PS.PLAYING) {
-      setIsPlaying(true);
-      const playerIdx = event.target.getPlaylistIndex?.() ?? -1;
-      if (playerIdx >= 0) {
-        const posInOrder = playOrderRef.current.indexOf(playerIdx);
-        if (posInOrder !== -1 && posInOrder !== posRef.current) {
-          updatePos(posInOrder);
-          prefetchMeta(posInOrder);
-        }
-      }
       const vd = event.target.getVideoData?.();
+      const expected = expectedIdRef.current;
+
+      // YouTube went somewhere we didn't send it (native auto-advance) — pull it back
+      if (vd?.video_id && expected && vd.video_id !== expected && correctionsRef.current < 2) {
+        correctionsRef.current++;
+        event.target.loadVideoById(expected);
+        return;
+      }
+      correctionsRef.current = 0;
+      setIsPlaying(true);
+
+      const origIdx = videoIdsRef.current.indexOf(vd?.video_id ?? '');
+      if (origIdx !== -1 && !playedRef.current.includes(origIdx)) {
+        playedRef.current.push(origIdx);
+      }
+
       if (vd?.video_id) {
         setMeta(prev => new Map(prev).set(vd.video_id, {
           title: vd.title ?? vd.video_id,
@@ -236,15 +284,27 @@ export default function Player({ playlistId, onBack }: Props) {
 
   function toggleShuffle() {
     const next = !shuffle;
+    shuffleRef.current = next;
     setShuffle(next);
     const currentOrigIdx = playOrderRef.current[posRef.current];
+    if (currentOrigIdx === undefined) return; // initPlaylist applies it once loaded
 
     if (next) {
-      const others = playOrderRef.current.filter((_, i) => i !== posRef.current);
-      const newOrder = [currentOrigIdx, ...shuffleArray(others)];
-      updatePlayOrder(newOrder);
-      updatePos(0);
-      prefetchMeta(0);
+      // Already-played tracks become history (reachable via prev), the rest
+      // gets shuffled. Nothing from this cycle is queued a second time.
+      let history = playedRef.current.filter(i => i !== currentOrigIdx);
+      let remaining = videoIdsRef.current
+        .map((_, i) => i)
+        .filter(i => i !== currentOrigIdx && !history.includes(i));
+      if (remaining.length === 0) {
+        // Whole playlist already heard — start a new cycle from here
+        history = [];
+        remaining = videoIdsRef.current.map((_, i) => i).filter(i => i !== currentOrigIdx);
+        playedRef.current = [currentOrigIdx];
+      }
+      updatePlayOrder([...history, currentOrigIdx, ...shuffleArray(remaining)]);
+      updatePos(history.length);
+      prefetchMeta(history.length);
     } else {
       const sequential = videoIdsRef.current.map((_, i) => i);
       updatePlayOrder(sequential);
@@ -273,7 +333,18 @@ export default function Player({ playlistId, onBack }: Props) {
   }
 
   function jumpToQueue(queueIndex: number) {
-    navigateTo(pos + 1 + queueIndex);
+    const target = posRef.current + 1 + queueIndex;
+    if (shuffleRef.current && queueIndex > 0) {
+      // Play it next instead of skipping over the tracks in between,
+      // so they still come up in this cycle
+      const order = [...playOrderRef.current];
+      const [picked] = order.splice(target, 1);
+      order.splice(posRef.current + 1, 0, picked);
+      updatePlayOrder(order);
+      navigateTo(posRef.current + 1);
+    } else {
+      navigateTo(target);
+    }
   }
 
   // ── Derived display values ────────────────────────────────────────────────
